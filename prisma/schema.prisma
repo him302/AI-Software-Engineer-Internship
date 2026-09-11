@@ -1,0 +1,176 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String             @id @default(uuid())
+  email            String             @unique
+  passwordHash     String
+  name             String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  
+  savedColleges    SavedCollege[]
+  savedComparisons SavedComparison[]
+  reviews          Review[]
+}
+
+model College {
+  id               String             @id @default(uuid())
+  name             String
+  slug             String             @unique
+  location         String
+  state            String
+  collegeType      String             // "Public", "Private", "Deemed University"
+  description      String?            @db.Text
+  rating           Decimal            @db.Decimal(3, 1) // e.g., 4.5
+  annualFees       Int
+  averagePackage   Int
+  highestPackage   Int
+  placementRate    Decimal            @db.Decimal(5, 2) // e.g., 95.50
+  website          String?
+  establishedYear  Int?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  courses          CollegeCourse[]
+  placements       Placement[]
+  admissionCutoffs AdmissionCutoff[]
+  reviews          Review[]
+  savedByUsers     SavedCollege[]
+  inComparisons    SavedComparisonCollege[]
+
+  @@index([state, location])
+  @@index([rating])
+  @@index([annualFees])
+  @@index([averagePackage])
+}
+
+model Course {
+  id               String             @id @default(uuid())
+  name             String             @unique // e.g., "Computer Science and Engineering"
+  degree           String             // e.g., "B.Tech", "M.Tech"
+  duration         Int                // in years
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  colleges         CollegeCourse[]
+  admissionCutoffs AdmissionCutoff[]
+}
+
+model CollegeCourse {
+  id               String             @id @default(uuid())
+  collegeId        String
+  courseId         String
+  seats            Int?
+  fees             Int?               // Course-specific fees if different from general
+  status           String             @default("Active") // "Active", "Discontinued"
+  
+  college          College            @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  course           Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([collegeId, courseId])
+  @@index([collegeId])
+  @@index([courseId])
+}
+
+model Exam {
+  id               String             @id @default(uuid())
+  name             String             @unique
+  slug             String             @unique
+  description      String?            @db.Text
+
+  admissionCutoffs AdmissionCutoff[]
+}
+
+model AdmissionCutoff {
+  id               String             @id @default(uuid())
+  collegeId        String
+  courseId         String
+  examId           String
+  category         String             // "General", "OBC", "SC", "ST", "EWS"
+  year             Int
+  openingRank      Int?
+  closingRank      Int
+  
+  college          College            @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  course           Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  exam             Exam               @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@index([collegeId, courseId, examId, category, year])
+  @@index([examId, closingRank])
+}
+
+model Placement {
+  id               String             @id @default(uuid())
+  collegeId        String
+  year             Int
+  averagePackage   Int
+  highestPackage   Int
+  medianPackage    Int?
+  placementRate    Decimal            @db.Decimal(5, 2)
+  
+  college          College            @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+
+  @@unique([collegeId, year])
+}
+
+model Review {
+  id               String             @id @default(uuid())
+  collegeId        String
+  userId           String
+  rating           Int                // 1 to 5
+  title            String
+  content          String             @db.Text
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  college          College            @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([collegeId])
+  @@index([userId])
+}
+
+model SavedCollege {
+  id               String             @id @default(uuid())
+  userId           String
+  collegeId        String
+  createdAt        DateTime           @default(now())
+
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  college          College            @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, collegeId])
+  @@index([userId])
+}
+
+model SavedComparison {
+  id               String                     @id @default(uuid())
+  userId           String
+  name             String?
+  createdAt        DateTime                   @default(now())
+
+  user             User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  colleges         SavedComparisonCollege[]
+
+  @@index([userId])
+}
+
+model SavedComparisonCollege {
+  id               String             @id @default(uuid())
+  comparisonId     String
+  collegeId        String
+  orderIndex       Int                @default(0) // To keep the visual order
+  
+  comparison       SavedComparison    @relation(fields: [comparisonId], references: [id], onDelete: Cascade)
+  college          College            @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+
+  @@unique([comparisonId, collegeId])
+  @@index([comparisonId])
+}
