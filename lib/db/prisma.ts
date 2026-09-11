@@ -10,6 +10,23 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClientSingleton | undefined;
 };
 
-export const prisma = globalForPrisma.prisma ?? prismaClientSingleton();
+const getPrismaClient = () => {
+  if (!globalForPrisma.prisma) {
+    globalForPrisma.prisma = prismaClientSingleton();
+  }
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+  return globalForPrisma.prisma;
+};
+
+export const prisma = new Proxy({} as PrismaClientSingleton, {
+  get(_target, property) {
+    const client = getPrismaClient();
+    const value = Reflect.get(client, property);
+
+    return typeof value === "function" ? value.bind(client) : value;
+  }
+});
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = globalForPrisma.prisma ?? getPrismaClient();
+}
